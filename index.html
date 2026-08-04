@@ -1,0 +1,355 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>벽돌깨기</title>
+<style>
+  html, body {
+    margin: 0;
+    height: 100%;
+    background: linear-gradient(160deg, #0f172a, #1e1b4b);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-family: 'Segoe UI', 'Malgun Gothic', sans-serif;
+    overflow: hidden;
+  }
+  #wrap {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 12px;
+  }
+  #hud {
+    width: 480px;
+    display: flex;
+    justify-content: space-between;
+    color: #e2e8f0;
+    font-size: 18px;
+    padding: 0 4px;
+    box-sizing: border-box;
+  }
+  #hud span { font-weight: bold; color: #38bdf8; }
+  canvas {
+    background: #0b1020;
+    border: 3px solid #334155;
+    border-radius: 8px;
+    box-shadow: 0 0 30px rgba(56, 189, 248, 0.25);
+    display: block;
+  }
+  #overlay {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    color: #f1f5f9;
+    text-align: center;
+    background: rgba(15, 23, 42, 0.9);
+    padding: 24px 36px;
+    border-radius: 12px;
+    display: none;
+    flex-direction: column;
+    gap: 10px;
+    align-items: center;
+    z-index: 10;
+  }
+  #overlay h2 { margin: 0; font-size: 28px; }
+  #overlay button {
+    margin-top: 8px;
+    padding: 10px 22px;
+    font-size: 16px;
+    background: #38bdf8;
+    border: none;
+    border-radius: 6px;
+    color: #0b1020;
+    font-weight: bold;
+    cursor: pointer;
+  }
+  #overlay button:hover { background: #7dd3fc; }
+  #help {
+    color: #94a3b8;
+    font-size: 13px;
+  }
+</style>
+</head>
+<body>
+<div id="wrap">
+  <div id="hud">
+    <div>점수: <span id="score">0</span></div>
+    <div>목숨: <span id="lives">3</span></div>
+    <div>단계: <span id="level">1</span></div>
+  </div>
+  <div style="position: relative;">
+    <canvas id="game" width="480" height="600"></canvas>
+    <div id="overlay">
+      <h2 id="overlayTitle">일시정지</h2>
+      <div id="overlayMsg"></div>
+      <button id="overlayBtn">시작</button>
+    </div>
+  </div>
+  <div id="help">← → 또는 마우스로 패들 이동 · 스페이스바로 공 발사/일시정지</div>
+</div>
+
+<script>
+const canvas = document.getElementById('game');
+const ctx = canvas.getContext('2d');
+const W = canvas.width, H = canvas.height;
+
+const scoreEl = document.getElementById('score');
+const livesEl = document.getElementById('lives');
+const levelEl = document.getElementById('level');
+const overlay = document.getElementById('overlay');
+const overlayTitle = document.getElementById('overlayTitle');
+const overlayMsg = document.getElementById('overlayMsg');
+const overlayBtn = document.getElementById('overlayBtn');
+
+const PADDLE_W = 90, PADDLE_H = 12;
+const BALL_R = 7;
+const BRICK_ROWS = 5, BRICK_COLS = 8;
+const BRICK_W = 52, BRICK_H = 18, BRICK_GAP = 6, BRICK_TOP = 50, BRICK_LEFT = (W - (BRICK_COLS*(BRICK_W+BRICK_GAP)-BRICK_GAP))/2;
+
+const rowColors = ['#f87171', '#fb923c', '#facc15', '#4ade80', '#38bdf8'];
+
+let state = {
+  score: 0,
+  lives: 3,
+  level: 1,
+  running: false,
+  ballAttached: true,
+  paddleX: W/2 - PADDLE_W/2,
+  ball: { x: W/2, y: 0, vx: 0, vy: 0, speed: 4.5 },
+  bricks: []
+};
+
+function buildBricks() {
+  const bricks = [];
+  for (let r = 0; r < BRICK_ROWS; r++) {
+    for (let c = 0; c < BRICK_COLS; c++) {
+      bricks.push({
+        x: BRICK_LEFT + c * (BRICK_W + BRICK_GAP),
+        y: BRICK_TOP + r * (BRICK_H + BRICK_GAP),
+        alive: true,
+        color: rowColors[r % rowColors.length],
+        points: (BRICK_ROWS - r) * 10
+      });
+    }
+  }
+  return bricks;
+}
+
+function resetBallOnPaddle() {
+  state.ballAttached = true;
+  state.ball.x = state.paddleX + PADDLE_W / 2;
+  state.ball.y = H - 30 - BALL_R;
+  state.ball.vx = 0;
+  state.ball.vy = 0;
+}
+
+function newGame() {
+  state.score = 0;
+  state.lives = 3;
+  state.level = 1;
+  state.paddleX = W/2 - PADDLE_W/2;
+  state.bricks = buildBricks();
+  state.ball.speed = 4.5;
+  resetBallOnPaddle();
+  updateHud();
+}
+
+function nextLevel() {
+  state.level++;
+  state.bricks = buildBricks();
+  state.ball.speed += 0.6;
+  state.paddleX = W/2 - PADDLE_W/2;
+  resetBallOnPaddle();
+  updateHud();
+}
+
+function updateHud() {
+  scoreEl.textContent = state.score;
+  livesEl.textContent = state.lives;
+  levelEl.textContent = state.level;
+}
+
+function launchBall() {
+  if (!state.ballAttached) return;
+  state.ballAttached = false;
+  const angle = -Math.PI/2 + (Math.random() * 0.6 - 0.3);
+  state.ball.vx = Math.cos(angle) * state.ball.speed;
+  state.ball.vy = Math.sin(angle) * state.ball.speed;
+}
+
+function showOverlay(title, msg, btnText) {
+  overlayTitle.textContent = title;
+  overlayMsg.textContent = msg;
+  overlayBtn.textContent = btnText;
+  overlay.style.display = 'flex';
+}
+function hideOverlay() { overlay.style.display = 'none'; }
+
+// input
+const keys = { left: false, right: false };
+document.addEventListener('keydown', e => {
+  if (e.code === 'ArrowLeft') keys.left = true;
+  if (e.code === 'ArrowRight') keys.right = true;
+  if (e.code === 'Space') {
+    e.preventDefault();
+    if (!state.running) {
+      startOrResume();
+    } else if (state.ballAttached) {
+      launchBall();
+    } else {
+      pauseGame();
+    }
+  }
+});
+document.addEventListener('keyup', e => {
+  if (e.code === 'ArrowLeft') keys.left = false;
+  if (e.code === 'ArrowRight') keys.right = false;
+});
+canvas.addEventListener('mousemove', e => {
+  const rect = canvas.getBoundingClientRect();
+  const scale = W / rect.width;
+  let mx = (e.clientX - rect.left) * scale - PADDLE_W/2;
+  mx = Math.max(0, Math.min(W - PADDLE_W, mx));
+  state.paddleX = mx;
+});
+canvas.addEventListener('click', () => {
+  if (!state.running) { startOrResume(); return; }
+  if (state.ballAttached) launchBall();
+});
+overlayBtn.addEventListener('click', () => startOrResume());
+
+function pauseGame() {
+  state.running = false;
+  showOverlay('일시정지', '스페이스바 또는 버튼으로 계속하기', '계속하기');
+}
+
+function startOrResume() {
+  if (state.lives <= 0) {
+    newGame();
+  }
+  state.running = true;
+  hideOverlay();
+}
+
+function loop() {
+  update();
+  draw();
+  requestAnimationFrame(loop);
+}
+
+function update() {
+  if (!state.running) return;
+
+  // paddle movement (keyboard)
+  const speed = 7;
+  if (keys.left) state.paddleX -= speed;
+  if (keys.right) state.paddleX += speed;
+  state.paddleX = Math.max(0, Math.min(W - PADDLE_W, state.paddleX));
+
+  const ball = state.ball;
+  if (state.ballAttached) {
+    ball.x = state.paddleX + PADDLE_W / 2;
+    return;
+  }
+
+  ball.x += ball.vx;
+  ball.y += ball.vy;
+
+  // wall collisions
+  if (ball.x - BALL_R < 0) { ball.x = BALL_R; ball.vx *= -1; }
+  if (ball.x + BALL_R > W) { ball.x = W - BALL_R; ball.vx *= -1; }
+  if (ball.y - BALL_R < 0) { ball.y = BALL_R; ball.vy *= -1; }
+
+  // paddle collision
+  const paddleY = H - 22;
+  if (ball.vy > 0 &&
+      ball.y + BALL_R >= paddleY &&
+      ball.y + BALL_R <= paddleY + PADDLE_H + 6 &&
+      ball.x >= state.paddleX &&
+      ball.x <= state.paddleX + PADDLE_W) {
+    const hitPos = (ball.x - state.paddleX) / PADDLE_W; // 0..1
+    const angle = (hitPos - 0.5) * (Math.PI * 0.7) - Math.PI/2;
+    ball.vx = Math.cos(angle) * state.ball.speed;
+    ball.vy = Math.sin(angle) * state.ball.speed;
+    ball.y = paddleY - BALL_R;
+  }
+
+  // brick collisions
+  for (const b of state.bricks) {
+    if (!b.alive) continue;
+    if (ball.x + BALL_R > b.x && ball.x - BALL_R < b.x + BRICK_W &&
+        ball.y + BALL_R > b.y && ball.y - BALL_R < b.y + BRICK_H) {
+      b.alive = false;
+      state.score += b.points;
+      updateHud();
+
+      // determine bounce side
+      const overlapLeft = (ball.x + BALL_R) - b.x;
+      const overlapRight = (b.x + BRICK_W) - (ball.x - BALL_R);
+      const overlapTop = (ball.y + BALL_R) - b.y;
+      const overlapBottom = (b.y + BRICK_H) - (ball.y - BALL_R);
+      const minOverlap = Math.min(overlapLeft, overlapRight, overlapTop, overlapBottom);
+      if (minOverlap === overlapLeft || minOverlap === overlapRight) {
+        ball.vx *= -1;
+      } else {
+        ball.vy *= -1;
+      }
+      break;
+    }
+  }
+
+  // ball lost
+  if (ball.y - BALL_R > H) {
+    state.lives--;
+    updateHud();
+    if (state.lives <= 0) {
+      state.running = false;
+      showOverlay('게임 오버', `최종 점수: ${state.score}`, '다시 시작');
+      return;
+    } else {
+      resetBallOnPaddle();
+    }
+  }
+
+  // level clear
+  if (state.bricks.every(b => !b.alive)) {
+    state.running = false;
+    showOverlay('레벨 클리어!', `${state.level}단계 완료 - 점수: ${state.score}`, '다음 단계');
+    overlayBtn.onclick = () => { nextLevel(); state.running = true; hideOverlay(); overlayBtn.onclick = () => startOrResume(); };
+  }
+}
+
+function draw() {
+  ctx.clearRect(0, 0, W, H);
+
+  // bricks
+  for (const b of state.bricks) {
+    if (!b.alive) continue;
+    ctx.fillStyle = b.color;
+    ctx.beginPath();
+    ctx.roundRect(b.x, b.y, BRICK_W, BRICK_H, 3);
+    ctx.fill();
+  }
+
+  // paddle
+  ctx.fillStyle = '#38bdf8';
+  ctx.beginPath();
+  ctx.roundRect(state.paddleX, H - 22, PADDLE_W, PADDLE_H, 6);
+  ctx.fill();
+
+  // ball
+  ctx.beginPath();
+  ctx.arc(state.ball.x, state.ball.y, BALL_R, 0, Math.PI * 2);
+  ctx.fillStyle = '#f1f5f9';
+  ctx.fill();
+}
+
+newGame();
+showOverlay('벽돌깨기', '스페이스바 또는 버튼으로 시작', '시작');
+requestAnimationFrame(loop);
+</script>
+</body>
+</html>
