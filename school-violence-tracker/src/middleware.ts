@@ -2,27 +2,23 @@ import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
 import { ADMIN_COOKIE_NAME, verifyAdminSessionCookie } from "@/lib/adminSession";
 
-function buildCsp(nonce: string): string {
-  const isDev = process.env.NODE_ENV !== "production";
-  // 개발 모드에서는 Next.js HMR(webpack eval devtool)이 동작하려면 'unsafe-eval'이 필요하다.
-  // 운영 빌드에서는 nonce + strict-dynamic만 사용한다.
-  const scriptSrc = isDev
-    ? `'self' 'nonce-${nonce}' 'unsafe-eval' 'strict-dynamic'`
-    : `'self' 'nonce-${nonce}' 'strict-dynamic'`;
-
-  return [
-    "default-src 'self'",
-    `script-src ${scriptSrc}`,
-    "style-src 'self' 'unsafe-inline'",
-    "img-src 'self' data:",
-    "font-src 'self'",
-    "connect-src 'self'",
-    "object-src 'none'",
-    "base-uri 'self'",
-    "form-action 'self'",
-    "frame-ancestors 'none'",
-  ].join("; ");
-}
+// nonce 기반 strict-dynamic CSP는 Next.js가 미들웨어에서 만든 nonce를 자기 스크립트
+// 태그에 자동으로 심어주는 동작에 의존하는데, Netlify의 Next.js 런타임(Edge Function
+// → Function 경계)에서는 이 미들웨어發 요청 헤더가 렌더링 단계까지 전달되지 않아
+// 모든 스크립트가 nonce 불일치로 막혀버렸다(운영에서 확인됨). 그래서 nonce는 쓰지 않고
+// 'self'(외부 스크립트 출처 차단)만으로 스크립트를 제한한다.
+const CSP = [
+  "default-src 'self'",
+  "script-src 'self' 'unsafe-inline'",
+  "style-src 'self' 'unsafe-inline'",
+  "img-src 'self' data:",
+  "font-src 'self'",
+  "connect-src 'self'",
+  "object-src 'none'",
+  "base-uri 'self'",
+  "form-action 'self'",
+  "frame-ancestors 'none'",
+].join("; ");
 
 export async function middleware(req: NextRequest) {
   const { pathname } = req.nextUrl;
@@ -45,19 +41,8 @@ export async function middleware(req: NextRequest) {
     }
   }
 
-  const nonce = Buffer.from(crypto.randomUUID()).toString("base64");
-  const csp = buildCsp(nonce);
-
-  const requestHeaders = new Headers(req.headers);
-  requestHeaders.set("x-nonce", nonce);
-  requestHeaders.set("Content-Security-Policy", csp);
-
-  const response = NextResponse.next({ request: { headers: requestHeaders } });
-  response.headers.set("Content-Security-Policy", csp);
-  // CDN/엣지가 이 응답(HTML)을 캐싱하면, 헤더의 nonce와 HTML에 박힌 nonce가 서로 다른
-  // 요청의 것으로 어긋나 CSP가 모든 스크립트를 막아버린다. 페이지 캐싱을 금지해 항상
-  // 같은 요청에서 나온 헤더/본문 쌍이 함께 쓰이도록 한다.
-  response.headers.set("Cache-Control", "private, no-cache, no-store, must-revalidate");
+  const response = NextResponse.next();
+  response.headers.set("Content-Security-Policy", CSP);
   return response;
 }
 
