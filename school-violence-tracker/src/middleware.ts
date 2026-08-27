@@ -54,6 +54,10 @@ export async function middleware(req: NextRequest) {
 
   const response = NextResponse.next({ request: { headers: requestHeaders } });
   response.headers.set("Content-Security-Policy", csp);
+  // CDN/엣지가 이 응답(HTML)을 캐싱하면, 헤더의 nonce와 HTML에 박힌 nonce가 서로 다른
+  // 요청의 것으로 어긋나 CSP가 모든 스크립트를 막아버린다. 페이지 캐싱을 금지해 항상
+  // 같은 요청에서 나온 헤더/본문 쌍이 함께 쓰이도록 한다.
+  response.headers.set("Cache-Control", "private, no-cache, no-store, must-revalidate");
   return response;
 }
 
