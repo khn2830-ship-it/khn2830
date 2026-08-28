@@ -183,7 +183,7 @@ export default function ViewerApp() {
 
         <div>
           <label className="mb-1 block text-sm font-medium">확인 유형 (FAQ 안내용)</label>
-          <div className="flex gap-3 text-sm">
+          <div className="flex flex-wrap gap-3 text-sm">
             {ROLE_OPTIONS.map((r) => (
               <label key={r.value} className="flex items-center gap-1">
                 <input

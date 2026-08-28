@@ -22,8 +22,9 @@ export const FLOW_STEPS: { stage: Stage; label: string; description: string }[] 
 ];
 
 export const ROLE_OPTIONS = [
-  { value: "victim", label: "피해측" },
-  { value: "offender", label: "가해측" },
+  { value: "victim", label: "피해관련" },
+  { value: "offender", label: "가해관련" },
+  { value: "both", label: "가피해관련" },
   { value: "homeroom", label: "담임교사" },
 ] as const;
 
