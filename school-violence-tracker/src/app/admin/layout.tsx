@@ -15,6 +15,7 @@ export default async function AdminLayout({ children }: { children: React.ReactN
             <nav className="flex items-center gap-4 text-sm font-medium">
               <Link href="/admin/cases">사안 관리</Link>
               <Link href="/admin/logs">조회 로그</Link>
+              <Link href="/admin/settings">설정</Link>
             </nav>
             <LogoutButton />
           </div>

@@ -40,3 +40,4 @@ export const ADMIN_LOGIN_FAIL_LIMIT = 5;
 export const ADMIN_LOGIN_FAIL_WINDOW_MINUTES = 15;
 export const ADMIN_LOGIN_LOCK_MINUTES = 15;
 export const ADMIN_SESSION_MAX_AGE_SECONDS = 12 * 60 * 60; // 12시간
+export const ADMIN_PASSWORD_MIN_LENGTH = 10;

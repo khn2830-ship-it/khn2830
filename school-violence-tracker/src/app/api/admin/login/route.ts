@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { countRecentFailuresByIp, logAttempt } from "@/lib/db";
+import { verifyAdminPassword } from "@/lib/adminAuth";
 import { createAdminSessionCookie, ADMIN_COOKIE_NAME } from "@/lib/adminSession";
 import { getClientIp, maskIp } from "@/lib/net";
 import { withErrorHandling } from "@/lib/apiError";
@@ -11,24 +12,7 @@ import {
   ADMIN_SESSION_MAX_AGE_SECONDS,
 } from "@/lib/constants";
 
-function timingSafeStringEqual(a: string, b: string): boolean {
-  const aBytes = new TextEncoder().encode(a);
-  const bBytes = new TextEncoder().encode(b);
-  if (aBytes.length !== bBytes.length) return false;
-  let diff = 0;
-  for (let i = 0; i < aBytes.length; i += 1) diff |= aBytes[i] ^ bBytes[i];
-  return diff === 0;
-}
-
 export const POST = withErrorHandling(async (req: NextRequest) => {
-  const adminPassword = process.env.ADMIN_PASSWORD;
-  if (!adminPassword) {
-    return NextResponse.json(
-      { error: "서버에 관리자 비밀번호가 설정되어 있지 않습니다." },
-      { status: 500 }
-    );
-  }
-
   let body: { password?: string };
   try {
     body = await req.json();
@@ -47,7 +31,8 @@ export const POST = withErrorHandling(async (req: NextRequest) => {
     );
   }
 
-  if (!timingSafeStringEqual(password, adminPassword)) {
+  const ok = await verifyAdminPassword(password);
+  if (!ok) {
     await logAttempt({ caseCode: ADMIN_LOGIN_LOG_CODE, result: "fail", ipMasked });
     return NextResponse.json({ error: "비밀번호가 올바르지 않습니다." }, { status: 401 });
   }

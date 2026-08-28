@@ -218,6 +218,12 @@ export default function ViewerApp() {
           {loading ? "조회 중..." : "조회하기"}
         </button>
       </form>
+
+      <p className="mt-6 text-center text-xs text-slate-400">
+        <a href="/admin" className="hover:underline">
+          관리자이신가요?
+        </a>
+      </p>
     </main>
   );
 }

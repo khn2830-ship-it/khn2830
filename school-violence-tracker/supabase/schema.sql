@@ -45,6 +45,15 @@ create table if not exists purge_log (
   purged_count int not null default 0
 );
 
+-- 관리자 비밀번호(해시). 단일 관리자 계정을 전제로 한 1행짜리 테이블.
+-- 이 행이 없으면 로그인 시 ADMIN_PASSWORD 환경변수(부트스트랩 값)를 사용한다.
+create table if not exists admin_credentials (
+  id smallint primary key default 1,
+  password_hash text not null,
+  updated_at timestamptz not null default now(),
+  check (id = 1)
+);
+
 -- updated_at 자동 갱신
 create or replace function set_updated_at() returns trigger as $$
 begin

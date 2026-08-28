@@ -204,3 +204,19 @@ export async function purgeDueCases(): Promise<number> {
     client.release();
   }
 }
+
+export async function getAdminPasswordHash(): Promise<string | null> {
+  const { rows } = await pool.query<{ password_hash: string }>(
+    "select password_hash from admin_credentials where id = 1"
+  );
+  return rows[0]?.password_hash ?? null;
+}
+
+export async function setAdminPasswordHash(hash: string): Promise<void> {
+  await pool.query(
+    `insert into admin_credentials (id, password_hash, updated_at)
+     values (1, $1, now())
+     on conflict (id) do update set password_hash = excluded.password_hash, updated_at = now()`,
+    [hash]
+  );
+}
